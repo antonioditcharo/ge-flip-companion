@@ -1,0 +1,103 @@
+name: Foundation v2 promotion
+
+on:
+  schedule:
+    - cron: "27 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ge-flip-foundation-v2-promotion
+  cancel-in-progress: false
+
+jobs:
+  evaluate-and-promote:
+    name: Evaluate and promote foundation v2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NODE_ENV: production
+      FOUNDATION_FILE: data/ml/ge-flip-5m-foundation-v2.csv
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Stop if foundation v2 already exists
+        id: existing
+        shell: bash
+        run: |
+          if [[ -f "$FOUNDATION_FILE" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up Node.js
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        if: steps.existing.outputs.exists != 'true'
+        run: npm ci
+      - name: Verify required configuration
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "::error::DATABASE_URL repository secret is missing."
+            exit 1
+          fi
+      - name: Export candidate dataset
+        if: steps.existing.outputs.exists != 'true'
+        id: export
+        shell: bash
+        run: |
+          VERSION="foundation-v2-candidate-$(date -u +%Y%m%dT%H%M%SZ)"
+          FILE="data/ml/ge-flip-5m-${VERSION}.csv"
+          node scripts/export-ml-dataset.mjs --version="$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "manifest=$FILE.manifest.json" >> "$GITHUB_OUTPUT"
+      - name: Audit candidate maturity
+        if: steps.existing.outputs.exists != 'true'
+        id: audit
+        shell: bash
+        run: |
+          set +e
+          node scripts/audit-ml-dataset.mjs --file="${{ steps.export.outputs.file }}" --cadence-minutes=5 --gap-multiplier=3 --min-train-days=14 --min-validation-days=3 --min-test-days=3
+          AUDIT_EXIT=$?
+          set -e
+          case "$AUDIT_EXIT" in
+            0) echo "ready=true" >> "$GITHUB_OUTPUT" ;;
+            2) echo "ready=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Dataset audit failed with exit code $AUDIT_EXIT."; exit "$AUDIT_EXIT" ;;
+          esac
+      - name: Validate mature split structure
+        if: steps.existing.outputs.exists != 'true' && steps.audit.outputs.ready == 'true'
+        run: node scripts/validate-ml-splits.mjs --file="${{ steps.export.outputs.file }}"
+      - name: Promote candidate to foundation v2
+        if: steps.existing.outputs.exists != 'true' && steps.audit.outputs.ready == 'true'
+        shell: bash
+        run: |
+          cp "${{ steps.export.outputs.file }}" "$FOUNDATION_FILE"
+          cp "${{ steps.export.outputs.manifest }}" "$FOUNDATION_FILE.manifest.json"
+      - name: Commit promoted foundation
+        if: steps.existing.outputs.exists != 'true' && steps.audit.outputs.ready == 'true'
+        shell: bash
+        run: |
+          git config user.name "ge-flip-foundation-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FOUNDATION_FILE" "$FOUNDATION_FILE.manifest.json"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "data: promote mature 5m foundation v2"
+          git push
+      - name: Remove temporary candidate
+        if: always() && steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          rm -f "${{ steps.export.outputs.file }}" "${{ steps.export.outputs.manifest }}"

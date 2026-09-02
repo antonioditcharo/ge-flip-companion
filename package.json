@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "market:backfill": "node scripts/backfill-market-history.mjs --timestep=5m --limit=100 --concurrency=2 --delay-ms=350",
+    "market:evaluate": "node scripts/evaluate-model-items.mjs --timestep=5m",
+    "market:validate": "node scripts/validate-ml-dataset.mjs",
+    "market:status": "node scripts/market-history-status.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -19,6 +23,7 @@
     "react-dom": "19.2.8",
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.6.0",
+    "ws": "^8.21.3",
     "zod": "^4.5.4"
   },
   "devDependencies": {
@@ -26,6 +31,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",

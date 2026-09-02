@@ -1,0 +1,48 @@
+name: Continuous market history
+
+on:
+  schedule:
+    - cron: "3,13,23,33,43,53 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ge-flip-market-history-continuous
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Collect and validate 5-minute history
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NODE_ENV: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify required configuration
+        shell: bash
+        run: |
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "::error::DATABASE_URL repository secret is missing."
+            exit 1
+          fi
+      - name: Backfill 5-minute market history
+        run: node scripts/backfill-market-history.mjs --timestep=5m --limit=100 --concurrency=2 --delay-ms=350
+      - name: Evaluate model item eligibility
+        run: node scripts/evaluate-model-items.mjs --timestep=5m
+      - name: Validate ML source dataset
+        run: node scripts/validate-ml-dataset.mjs
+      - name: Print final market history status
+        if: always()
+        run: node scripts/market-history-status.mjs
