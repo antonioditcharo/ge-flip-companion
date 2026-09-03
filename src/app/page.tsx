@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { Coins, Database, ShieldCheck, TrendingUp } from "lucide-react";
 import { sql } from "@/lib/db";
-import { formatGp, getSlotCapacity } from "@/lib/utils";
+import { formatGp, formatStatus, getSlotCapacity } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,14 @@ export default async function DashboardPage() {
       coalesce(sum(capital_committed), 0) as committed_cash,
       coalesce(sum(expected_profit), 0) as expected_profit
     from trades where status not in ('COMPLETED', 'CANCELLED')
+  `;
+  const activeTrades = await sql`
+    select trades.slot_number, trades.status, trades.planned_quantity,
+      trades.quantity_bought, trades.quantity_sold, trades.expected_profit,
+      items.name
+    from trades join items on items.id=trades.item_id
+    where trades.status not in ('COMPLETED','CANCELLED')
+    order by trades.slot_number
   `;
   const snapshotRows = await sql`select count(*) as snapshot_count from market_snapshots`;
 
@@ -54,7 +62,16 @@ export default async function DashboardPage() {
       createElement("div", { className: "mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" },
         Array.from({ length: slotCapacity }, (_, index) => createElement("article", { key: index, className: "min-h-28 rounded-2xl border border-dashed border-stone-700 bg-stone-950/40 p-4" },
           createElement("p", { className: "text-xs text-stone-500" }, "GE slot " + String(index + 1)),
-          createElement("p", { className: "mt-6 text-sm text-stone-500" }, "Available")
+          (() => {
+            const trade = activeTrades.find((row) => Number(row.slot_number) === index + 1);
+            return trade
+              ? createElement("div", { className: "mt-3" },
+                  createElement("p", { className: "font-semibold text-amber-200" }, String(trade.name)),
+                  createElement("p", { className: "mt-1 text-xs text-stone-400" }, formatStatus(String(trade.status))),
+                  createElement("p", { className: "mt-3 text-xs text-stone-500" }, `${Number(trade.quantity_bought).toLocaleString()} bought · ${Number(trade.quantity_sold).toLocaleString()} sold`)
+                )
+              : createElement("p", { className: "mt-6 text-sm text-stone-500" }, "Available");
+          })()
         ))
       )
     )

@@ -4,9 +4,13 @@ import { neon } from "@neondatabase/serverless";
 dotenv.config({ path: ".env.local" });
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
-if (!databaseUrl) throw new Error("DATABASE_URL or POSTGRES_URL is missing.");
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL or POSTGRES_URL is missing.");
+}
 
-const userAgent = process.env.OSRS_USER_AGENT ?? "GE Flip Companion - antonioditcharo on GitHub";
+const userAgent =
+  process.env.OSRS_USER_AGENT ??
+  "GE Flip Companion - antonioditcharo on GitHub";
 const baseUrl = "https://prices.runescape.wiki/api/v1/osrs";
 const sql = neon(databaseUrl);
 
@@ -17,15 +21,28 @@ async function getJson(route) {
       Accept: "application/json",
     },
   });
-  if (!response.ok) throw new Error(`${route} returned ${response.status} ${response.statusText}`);
+
+  if (!response.ok) {
+    throw new Error(
+      `${route} returned ${response.status} ${response.statusText}`,
+    );
+  }
+
   return response.json();
 }
 
-console.log("Downloading OSRS item mapping and price data...");
-const [mapping, latestResponse, fiveMinuteResponse] = await Promise.all([
+console.log("Downloading OSRS item mapping and market data...");
+
+const [
+  mapping,
+  latestResponse,
+  fiveMinuteResponse,
+  oneHourResponse,
+] = await Promise.all([
   getJson("/mapping"),
   getJson("/latest"),
   getJson("/5m"),
+  getJson("/1h"),
 ]);
 
 const items = mapping.map((item) => ({
@@ -33,21 +50,39 @@ const items = mapping.map((item) => ({
   name: item.name,
   examine: item.examine ?? null,
   members: Boolean(item.members),
-  lowAlchemy: item.lowalch ?? null,
-  highAlchemy: item.highalch ?? null,
-  storeValue: item.value ?? null,
-  buyLimit: item.limit ?? null,
-  iconName: item.icon ?? null,
+  low_alchemy: item.lowalch ?? null,
+  high_alchemy: item.highalch ?? null,
+  store_value: item.value ?? null,
+  buy_limit: item.limit ?? null,
+  icon_name: item.icon ?? null,
 }));
 
 await sql`
   insert into items (
-    id, name, examine, members, low_alchemy, high_alchemy,
-    store_value, buy_limit, icon_name, active, metadata_updated_at
+    id,
+    name,
+    examine,
+    members,
+    low_alchemy,
+    high_alchemy,
+    store_value,
+    buy_limit,
+    icon_name,
+    active,
+    metadata_updated_at
   )
   select
-    x.id, x.name, x.examine, x.members, x.low_alchemy, x.high_alchemy,
-    x.store_value, x.buy_limit, x.icon_name, true, now()
+    x.id,
+    x.name,
+    x.examine,
+    x.members,
+    x.low_alchemy,
+    x.high_alchemy,
+    x.store_value,
+    x.buy_limit,
+    x.icon_name,
+    true,
+    now()
   from jsonb_to_recordset(${JSON.stringify(items)}::jsonb) as x(
     id integer,
     name text,
@@ -74,40 +109,77 @@ await sql`
 
 const latest = latestResponse.data ?? {};
 const fiveMinute = fiveMinuteResponse.data ?? {};
-const snapshotIds = new Set([...Object.keys(latest), ...Object.keys(fiveMinute)]);
-const snapshots = [...snapshotIds].map((id) => {
-  const current = latest[id] ?? {};
-  const average = fiveMinute[id] ?? {};
-  return {
-    item_id: Number(id),
-    latest_high: current.high ?? null,
-    latest_high_time: current.highTime ?? null,
-    latest_low: current.low ?? null,
-    latest_low_time: current.lowTime ?? null,
-    average_high_5m: average.avgHighPrice ?? null,
-    average_low_5m: average.avgLowPrice ?? null,
-    high_volume_5m: average.highPriceVolume ?? null,
-    low_volume_5m: average.lowPriceVolume ?? null,
-  };
-}).filter((row) => Number.isInteger(row.item_id));
+const oneHour = oneHourResponse.data ?? {};
 
-await sql`
+const snapshotIds = new Set([
+  ...Object.keys(latest),
+  ...Object.keys(fiveMinute),
+  ...Object.keys(oneHour),
+]);
+
+const snapshots = [...snapshotIds]
+  .map((id) => {
+    const current = latest[id] ?? {};
+    const average = fiveMinute[id] ?? {};
+    const hourlyAverage = oneHour[id] ?? {};
+
+    return {
+      item_id: Number(id),
+      latest_high: current.high ?? null,
+      latest_high_time: current.highTime ?? null,
+      latest_low: current.low ?? null,
+      latest_low_time: current.lowTime ?? null,
+      average_high_5m: average.avgHighPrice ?? null,
+      average_low_5m: average.avgLowPrice ?? null,
+      high_volume_5m: average.highPriceVolume ?? null,
+      low_volume_5m: average.lowPriceVolume ?? null,
+      average_high_1h: hourlyAverage.avgHighPrice ?? null,
+      average_low_1h: hourlyAverage.avgLowPrice ?? null,
+      high_volume_1h: hourlyAverage.highPriceVolume ?? null,
+      low_volume_1h: hourlyAverage.lowPriceVolume ?? null,
+    };
+  })
+  .filter((row) => Number.isInteger(row.item_id));
+
+const insertedRows = await sql`
   insert into market_snapshots (
-    item_id, observed_at, latest_high, latest_high_time,
-    latest_low, latest_low_time, average_high_5m, average_low_5m,
-    high_volume_5m, low_volume_5m, source
+    item_id,
+    observed_at,
+    latest_high,
+    latest_high_time,
+    latest_low,
+    latest_low_time,
+    average_high_5m,
+    average_low_5m,
+    high_volume_5m,
+    low_volume_5m,
+    average_high_1h,
+    average_low_1h,
+    high_volume_1h,
+    low_volume_1h,
+    source
   )
   select
     x.item_id,
     now(),
     x.latest_high,
-    case when x.latest_high_time is null then null else to_timestamp(x.latest_high_time) end,
+    case
+      when x.latest_high_time is null then null
+      else to_timestamp(x.latest_high_time)
+    end,
     x.latest_low,
-    case when x.latest_low_time is null then null else to_timestamp(x.latest_low_time) end,
+    case
+      when x.latest_low_time is null then null
+      else to_timestamp(x.latest_low_time)
+    end,
     x.average_high_5m,
     x.average_low_5m,
     x.high_volume_5m,
     x.low_volume_5m,
+    x.average_high_1h,
+    x.average_low_1h,
+    x.high_volume_1h,
+    x.low_volume_1h,
     'OSRS_WIKI'
   from jsonb_to_recordset(${JSON.stringify(snapshots)}::jsonb) as x(
     item_id integer,
@@ -118,9 +190,16 @@ await sql`
     average_high_5m numeric,
     average_low_5m numeric,
     high_volume_5m bigint,
-    low_volume_5m bigint
+    low_volume_5m bigint,
+    average_high_1h numeric,
+    average_low_1h numeric,
+    high_volume_1h bigint,
+    low_volume_1h bigint
   )
   inner join items on items.id = x.item_id
+  returning id
 `;
 
-console.log(`Synced ${items.length} items and ${snapshots.length} market snapshots.`);
+console.log(
+  `Synced ${items.length} items and inserted ${insertedRows.length} market snapshots.`,
+);
