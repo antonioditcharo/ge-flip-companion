@@ -7,7 +7,8 @@ export const metadata: Metadata = { title: "Pipeline Operations" };
 export const dynamic = "force-dynamic";
 
 const REQUIRED_DAYS = 20;
-const STALE_AFTER_MINUTES = 25;
+const HEALTHY_AFTER_MINUTES = 45;
+const STALE_AFTER_MINUTES = 90;
 
 function asNumber(value: unknown) {
   const parsed = Number(value ?? 0);
@@ -33,7 +34,17 @@ export default async function OperationsPage() {
   const bar = bars[0];
   const data = dataset[0];
   const lastBarAge = bar?.last_bar ? asNumber(bar.last_bar_age_minutes) : Number.POSITIVE_INFINITY;
-  const healthy = run?.status === "COMPLETED" && asNumber(run?.failed_items) === 0 && lastBarAge <= STALE_AFTER_MINUTES;
+  const latestRunSucceeded =
+    run?.status === "COMPLETED" &&
+    asNumber(run?.failed_items) === 0;
+
+  const pipelineStatus =
+    !latestRunSucceeded ||
+    lastBarAge > STALE_AFTER_MINUTES
+      ? "stale"
+      : lastBarAge > HEALTHY_AFTER_MINUTES
+        ? "delayed"
+        : "healthy";
   const eligibleItems = eligibility.filter((row) => row.eligible === true).reduce((sum, row) => sum + asNumber(row.items), 0);
   const firstAt = data?.first_at ? new Date(String(data.first_at)).getTime() : 0;
   const lastAt = data?.last_at ? new Date(String(data.last_at)).getTime() : firstAt;
@@ -45,12 +56,31 @@ export default async function OperationsPage() {
     <section className="rounded-2xl border border-stone-800 bg-[#141a17] p-6 shadow-xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Operations</p><h1 className="mt-2 text-3xl font-bold">Market data pipeline</h1><p className="mt-2 max-w-2xl text-sm text-stone-400">Live ingestion health, model eligibility, dataset quality, and foundation readiness from Neon.</p></div>
-        <span className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-sm font-semibold ${healthy ? "border-emerald-700/50 bg-emerald-950/50 text-emerald-300" : "border-amber-700/50 bg-amber-950/50 text-amber-300"}`}>{healthy ? <CheckCircle2 size={16}/> : <TriangleAlert size={16}/>} {healthy ? "Pipeline healthy" : "Attention required"}</span>
+        <span
+          className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-sm font-semibold ${
+            pipelineStatus === "healthy"
+              ? "border-emerald-700/50 bg-emerald-950/50 text-emerald-300"
+              : pipelineStatus === "delayed"
+                ? "border-amber-700/50 bg-amber-950/50 text-amber-300"
+                : "border-red-700/50 bg-red-950/50 text-red-300"
+          }`}
+        >
+          {pipelineStatus === "healthy" ? (
+            <CheckCircle2 size={16} />
+          ) : (
+            <TriangleAlert size={16} />
+          )}
+          {pipelineStatus === "healthy"
+            ? "Pipeline healthy"
+            : pipelineStatus === "delayed"
+              ? "Collector delayed"
+              : "Pipeline stale"}
+        </span>
       </div>
     </section>
 
     <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <Metric icon={Clock3} label="Latest 5m bar" value={formatDate(bar?.last_bar)} detail={`${Number.isFinite(lastBarAge) ? Math.round(lastBarAge) : "?"} minutes old`} good={lastBarAge <= STALE_AFTER_MINUTES}/>
+      <Metric icon={Clock3} label="Latest 5m bar" value={formatDate(bar?.last_bar)} detail={`${Number.isFinite(lastBarAge) ? Math.round(lastBarAge) : "?"} minutes old`} good={lastBarAge <= HEALTHY_AFTER_MINUTES}/>
       <Metric icon={Database} label="5m market bars" value={formatNumber(bar?.bars)} detail={`${formatNumber(bar?.items)} tracked items`} good/>
       <Metric icon={Activity} label="Eligible items" value={formatNumber(eligibleItems)} detail="Current model-quality gate" good={eligibleItems > 0}/>
       <Metric icon={ShieldCheck} label="Foundation v2" value={foundationExists ? "Promoted" : "Collecting"} detail={foundationExists ? "Versioned dataset available" : `${availableDays.toFixed(1)} of ${REQUIRED_DAYS} days`} good={foundationExists}/>
