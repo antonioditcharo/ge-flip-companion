@@ -1,4 +1,5 @@
-import { BarChart3, CircleDollarSign, Gauge, Target, Trophy } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, BarChart3, CircleDollarSign, Gauge, Target, Trophy } from "lucide-react";
 import { sql } from "@/lib/db";
 import { formatGp } from "@/lib/utils";
 
@@ -39,7 +40,7 @@ export default async function AnalyticsPage() {
   const maxDayProfit=Math.max(1,...dayRows.map(row=>Math.abs(Number(row.profit))));
 
   return <div className="space-y-5">
-    <section className="rounded-3xl border border-stone-800 bg-[#141a17] p-6"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300"><BarChart3 size={24}/></div><h1 className="mt-4 text-3xl font-bold">Analytics</h1><p className="mt-2 text-sm text-stone-400">Performance calculated from completed trades with recorded execution prices.</p></section>
+    <section className="rounded-3xl border border-stone-800 bg-[#141a17] p-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300"><BarChart3 size={24}/></div><h1 className="mt-4 text-3xl font-bold">Analytics</h1><p className="mt-2 text-sm text-stone-400">Performance calculated from completed trades with recorded execution prices.</p></div><Link href="/analytics/recommendations" className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-700/60 bg-amber-950/20 px-4 py-2.5 text-sm font-semibold text-amber-200 hover:bg-amber-950/50">Recommendation outcomes<ArrowRight size={16} aria-hidden="true" /></Link></div></section>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Card icon={<CircleDollarSign size={16}/>} label="Realized profit" value={formatGp(String(s.total_profit ?? 0))}/>
       <Card icon={<Trophy size={16}/>} label="Completed trades" value={completed.toLocaleString()}/>
