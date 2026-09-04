@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 function authorized(request: Request) {
-  const secret = process.env.MARKET_CRON_SECRET;
+  const secret =
+    process.env.CRON_SECRET ??
+    process.env.MARKET_CRON_SECRET;
   const value = request.headers.get("authorization") ?? "";
   if (!secret) return false;
   const expected = Buffer.from(`Bearer ${secret}`);
