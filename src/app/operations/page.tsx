@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { Activity, CheckCircle2, Clock3, Database, ShieldCheck, TriangleAlert } from "lucide-react";
 import { existsSync } from "node:fs";
@@ -55,7 +56,7 @@ export default async function OperationsPage() {
   return <div className="space-y-6">
     <section className="rounded-2xl border border-stone-800 bg-[#141a17] p-6 shadow-xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Operations</p><h1 className="mt-2 text-3xl font-bold">Market data pipeline</h1><p className="mt-2 max-w-2xl text-sm text-stone-400">Live ingestion health, model eligibility, dataset quality, and foundation readiness from Neon.</p></div>
+        <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Operations</p><h1 className="mt-2 text-3xl font-bold">Market data pipeline</h1><p className="mt-2 max-w-2xl text-sm text-stone-400">Live ingestion health, model eligibility, dataset quality, and foundation readiness from Neon.</p><Link href="/operations/recommendations" className="mt-4 inline-flex items-center rounded-xl border border-amber-700/60 bg-amber-950/20 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-950/50">Recommendation pipeline</Link></div>
         <span
           className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-sm font-semibold ${
             pipelineStatus === "healthy"
