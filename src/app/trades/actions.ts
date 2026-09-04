@@ -37,7 +37,17 @@ export async function recordTradeFill(formData: FormData) {
           select * from trades where id=${tradeId}::uuid for update
         ), valid as (
           select * from locked
-          where status not in ('COMPLETED','CANCELLED')
+          where (
+              status in (
+                'BUY_READY',
+                'BUY_PLACED',
+                'PARTIALLY_BOUGHT'
+              )
+              or (
+                status = 'SELL_READY'
+                and quantity_bought = quantity_sold
+              )
+            )
             and quantity_bought + ${quantity} <= planned_quantity
         ), updated as (
           update trades t set
@@ -58,18 +68,69 @@ export async function recordTradeFill(formData: FormData) {
           select * from trades where id=${tradeId}::uuid for update
         ), valid as (
           select * from locked
-          where status not in ('COMPLETED','CANCELLED')
+          where status in (
+              'BOUGHT',
+              'SELL_READY',
+              'SELL_PLACED',
+              'PARTIALLY_SOLD'
+            )
             and quantity_bought > 0
             and quantity_sold + ${quantity} <= quantity_bought
         ), updated as (
           update trades t set
             quantity_sold = v.quantity_sold + ${quantity},
             average_sell_price = ((coalesce(v.average_sell_price,0) * v.quantity_sold) + (${unitPrice}::numeric * ${quantity})) / (v.quantity_sold + ${quantity}),
+            realized_tax = v.realized_tax + (
+              least(
+                5000000::numeric,
+                floor(${unitPrice}::numeric * 0.02)
+              ) * ${quantity}
+            )::bigint,
             status = case when v.quantity_sold + ${quantity} = v.quantity_bought and v.quantity_bought = v.planned_quantity then 'COMPLETED' when v.quantity_sold + ${quantity} = v.quantity_bought then 'SELL_READY' else 'PARTIALLY_SOLD' end,
             sell_started_at=coalesce(v.sell_started_at,now()),
             completed_at=case when v.quantity_sold + ${quantity} = v.quantity_bought and v.quantity_bought = v.planned_quantity then now() else t.completed_at end,
-            realized_profit = round((((coalesce(v.average_sell_price,0) * v.quantity_sold) + (${unitPrice}::numeric * ${quantity})) - least(5000000, floor(((coalesce(v.average_sell_price,0) * v.quantity_sold) + (${unitPrice}::numeric * ${quantity})) * 0.02)) - (coalesce(v.average_buy_price,0) * (v.quantity_sold + ${quantity}))))::bigint,
-            realized_roi = case when coalesce(v.average_buy_price,0) > 0 then ((((coalesce(v.average_sell_price,0) * v.quantity_sold) + (${unitPrice}::numeric * ${quantity})) - least(5000000, floor(((coalesce(v.average_sell_price,0) * v.quantity_sold) + (${unitPrice}::numeric * ${quantity})) * 0.02)) - (v.average_buy_price * (v.quantity_sold + ${quantity}))) / (v.average_buy_price * (v.quantity_sold + ${quantity}))) else null end,
+            realized_profit = round(
+              (
+                (coalesce(v.average_sell_price,0) * v.quantity_sold)
+                + (${unitPrice}::numeric * ${quantity})
+                - v.realized_tax
+                - (
+                  least(
+                    5000000::numeric,
+                    floor(${unitPrice}::numeric * 0.02)
+                  ) * ${quantity}
+                )
+                - (
+                  coalesce(v.average_buy_price,0)
+                  * (v.quantity_sold + ${quantity})
+                )
+              )
+            )::bigint,
+            realized_roi = case
+              when coalesce(v.average_buy_price,0) > 0 then
+                (
+                  (
+                    (coalesce(v.average_sell_price,0) * v.quantity_sold)
+                    + (${unitPrice}::numeric * ${quantity})
+                    - v.realized_tax
+                    - (
+                      least(
+                        5000000::numeric,
+                        floor(${unitPrice}::numeric * 0.02)
+                      ) * ${quantity}
+                    )
+                    - (
+                      v.average_buy_price
+                      * (v.quantity_sold + ${quantity})
+                    )
+                  )
+                  / (
+                    v.average_buy_price
+                    * (v.quantity_sold + ${quantity})
+                  )
+                )
+              else null
+            end,
             current_instruction = case when v.quantity_sold + ${quantity} = v.quantity_bought and v.quantity_bought = v.planned_quantity then 'Trade completed using recorded execution prices.' when v.quantity_sold + ${quantity} = v.quantity_bought then 'All purchased units sold. Buy the remaining planned quantity or cancel the remainder.' else 'Sale partially filled. Record another sell fill when available.' end,
             updated_at=now()
           from valid v where t.id=v.id returning t.id,t.status,t.realized_profit
@@ -90,7 +151,13 @@ export async function cancelTrade(formData: FormData) {
   const parsed=cancelSchema.safeParse({tradeId:formData.get("tradeId")});
   if(!parsed.success) redirect("/trades?error=invalid-update");
   const rows=await sql`
-    with previous as (select id,status from trades where id=${parsed.data.tradeId}::uuid and status not in ('COMPLETED','CANCELLED')),
+    with previous as (
+      select id,status
+      from trades
+      where id=${parsed.data.tradeId}::uuid
+        and status not in ('COMPLETED','CANCELLED')
+        and quantity_bought = quantity_sold
+    ),
     updated as (update trades set status='CANCELLED',current_instruction='Trade cancelled.',updated_at=now() where id in(select id from previous) returning id,status)
     insert into trade_events(trade_id,event_type,previous_status,new_status,note,system_generated)
     select updated.id,'TRADE_CANCELLED',previous.status,updated.status,'Cancelled manually.',false from updated join previous using(id) returning trade_id`;

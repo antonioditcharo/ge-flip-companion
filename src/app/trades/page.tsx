@@ -13,7 +13,7 @@ export default async function TradesPage({searchParams}:{searchParams:SearchPara
     <section className="rounded-3xl border border-stone-800 bg-[#141a17] p-6"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300"><Activity size={24}/></div><h1 className="mt-4 text-3xl font-bold">Active Trades</h1><p className="mt-2 text-sm text-stone-400">Record actual Grand Exchange fills. Weighted prices and realized results update automatically.</p></section>
     {params.started==="1"&&<Notice>Trade started and assigned to the first available GE slot.</Notice>}
     {params.updated==="1"&&<Notice>Execution recorded and trade totals recalculated.</Notice>}
-    {params.error&&<p role="alert" className="rounded-2xl border border-red-800/50 bg-red-950/30 p-4 text-sm text-red-200">The entry was rejected. Check the quantity against the remaining buy or sell amount.</p>}
+    {params.error&&<p role="alert" className="rounded-2xl border border-red-800/50 bg-red-950/30 p-4 text-sm text-red-200">{params.error==="not-found"?"The trade cannot be cancelled while purchased inventory remains unsold. Sell the remaining inventory first.":"The entry was rejected. Check the trade state, quantity, and remaining buy or sell amount."}</p>}
     {rows.length===0?<section className="rounded-2xl border border-dashed border-stone-700 bg-stone-950/30 p-8 text-center text-stone-400">No active trades. Start one from Trade Finder.</section>:<section className="grid gap-4 xl:grid-cols-2">{rows.map(row=>{
       const planned=Number(row.planned_quantity), bought=Number(row.quantity_bought), sold=Number(row.quantity_sold);
       return <article key={String(row.id)} className="rounded-2xl border border-stone-800 bg-[#141a17] p-5">

@@ -241,6 +241,9 @@ await sql`
     expected_profit bigint not null default 0,
     realized_profit bigint,
 
+    realized_tax bigint not null default 0
+      check (realized_tax >= 0),
+
     expected_roi numeric(12, 6),
     realized_roi numeric(12, 6),
 
