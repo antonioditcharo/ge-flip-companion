@@ -66,7 +66,7 @@ export default async function RecommendationOperationsPage() {
     <section className="rounded-3xl border border-stone-800 bg-[#141a17] p-6">
       <Link href="/operations" className="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-amber-300"><ArrowLeft size={16}/>Back to Pipeline Ops</Link>
       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Operations</p><h1 className="mt-2 text-3xl font-bold">Recommendation pipeline</h1><p className="mt-2 text-sm text-stone-400">Batch health, market provenance, persisted opportunities, and trade linkage.</p></div>
+        <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Operations</p><h1 className="mt-2 text-3xl font-bold">Recommendation pipeline</h1><p className="mt-2 text-sm text-stone-400">Batch health, market provenance, persisted opportunities, and trade linkage.</p><Link href="/operations/recommendations/history" className="mt-4 inline-flex items-center rounded-xl border border-amber-700/60 bg-amber-950/20 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-950/50">View batch history</Link></div>
         <span className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-sm font-semibold ${healthy?"border-emerald-700/50 bg-emerald-950/50 text-emerald-300":"border-amber-700/50 bg-amber-950/50 text-amber-300"}`}>{healthy?<CheckCircle2 size={16}/>:<TriangleAlert size={16}/>} {state}</span>
       </div>
     </section>
