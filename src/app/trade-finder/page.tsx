@@ -19,6 +19,7 @@ import { syncMarketData } from "./market-actions";
 export const dynamic = "force-dynamic";
 
 type Opportunity = {
+  recommendationId: string;
   id: number;
   name: string;
   members: boolean;
@@ -72,7 +73,7 @@ export default async function TradeFinderPage({
   const portfolioCash=BigInt(String(settings.cash_stack));
   const committedCash=BigInt(String(committedRows[0]?.committed??0));
   const liquidCash=portfolioCash>committedCash?portfolioCash-committedCash:BigInt(0);
-  const rows = await sql`
+  const dynamicRows = await sql`
     with latest_snapshot as (
       select distinct on (item_id)
         item_id,
@@ -236,7 +237,23 @@ export default async function TradeFinderPage({
     limit 40
   `;
 
+  const persistedRows = await sql`
+    select r.id recommendation_id,i.id,i.name,i.members,i.buy_limit,
+      r.recommended_buy_price buy_price,r.recommended_sell_price sell_price,
+      r.recommended_quantity quantity,
+      greatest(0,r.expected_profit/nullif(r.recommended_quantity,0)) net_profit_each,
+      r.expected_profit total_profit,r.expected_roi roi,r.volume_5m,r.volume_1h,
+      r.liquidity_score,r.confidence_score,r.risk_score,r.opportunity_score,
+      r.quote_age_minutes,r.price_deviation,r.classification
+    from recommendations r join items i on i.id=r.item_id
+    where r.active=true and r.expires_at>now()
+      and r.batch_id=(select id from recommendation_batches order by generated_at desc limit 1)
+    order by r.rank
+  `;
+  const rows=persistedRows.length>0?persistedRows:dynamicRows;
+
   const opportunities: Opportunity[] = rows.map((row) => ({
+    recommendationId: String(row.recommendation_id ?? ""),
     id: Number(row.id),
     name: String(row.name),
     members: Boolean(row.members),
@@ -468,8 +485,8 @@ function OpportunityCard({
       </div>
 
       <form action={startTradeFromFinder} className="mt-4">
-        <input type="hidden" name="itemId" value={item.id} />
-        <button type="submit" className="inline-flex w-full items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-stone-950 hover:bg-amber-300">Start trade</button>
+        <input type="hidden" name="recommendationId" value={item.recommendationId} />
+        <button type="submit" disabled={!item.recommendationId} className="inline-flex w-full items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-stone-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40">{item.recommendationId ? "Start trade" : "Refresh to enable"}</button>
       </form>
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-stone-800 pt-4 text-xs text-stone-500">
         <span className="inline-flex items-center gap-1.5">
