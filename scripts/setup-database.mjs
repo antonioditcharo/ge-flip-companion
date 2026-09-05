@@ -340,3 +340,5 @@ await sql`
 `;
 
 console.log("Database setup completed successfully.");
+const { migrateDatabase } = await import("./migrate-database.mjs");
+await migrateDatabase();

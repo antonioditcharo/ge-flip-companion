@@ -10,7 +10,10 @@
     "market:backfill": "node scripts/backfill-market-history.mjs --timestep=5m --limit=100 --concurrency=2 --delay-ms=350",
     "market:evaluate": "node scripts/evaluate-model-items.mjs --timestep=5m",
     "market:validate": "node scripts/validate-ml-dataset.mjs",
-    "market:status": "node scripts/market-history-status.mjs"
+    "market:status": "node scripts/market-history-status.mjs",
+    "db:migrate": "node scripts/migrate-database.mjs",
+    "db:migrate:status": "node scripts/migration-status.mjs",
+    "db:setup": "node scripts/setup-database.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
