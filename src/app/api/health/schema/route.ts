@@ -17,6 +17,7 @@ const requiredTables = [
   "model_item_eligibility",
   "ml_dataset_exports",
   "job_locks",
+  "schema_migrations",
 ];
 
 const requiredViews = [
