@@ -20,19 +20,29 @@ if(!["5m","1h","6h","24h"].includes(timestep)) throw new Error("Invalid timestep
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 const candidates=await sql`
-  with latest as(
-    select distinct on(item_id) item_id,coalesce(high_volume_1h,0)+coalesce(low_volume_1h,0) volume,
-      average_high_1h,average_low_1h,observed_at
-    from market_snapshots order by item_id,observed_at desc
+  with tracked as(
+    select
+      b.item_id,
+      max(b.bucket_at) last_bar_at,
+      coalesce(sum(coalesce(b.high_price_volume,0)+coalesce(b.low_price_volume,0))
+        filter(where b.bucket_at>=now()-interval '24 hours'),0) recent_volume
+    from market_bars b
+    where b.timestep=${timestep}
+    group by b.item_id
   )
-  select i.id,i.name,l.volume from items i join latest l on l.item_id=i.id
-  where i.active=true and l.average_high_1h is not null and l.average_low_1h is not null
-    and l.volume>0 and l.observed_at>now()-interval '24 hours'
-  order by l.volume desc limit ${limit}
+  select i.id,i.name,t.recent_volume volume
+  from tracked t join items i on i.id=t.item_id
+  where i.active=true
+  order by t.recent_volume desc,t.last_bar_at desc,i.id
+  limit ${limit}
 `;
 
+if(candidates.length===0){
+  throw new Error(`No tracked ${timestep} market-history candidates were found.`);
+}
+
 const runRows=await sql`insert into market_ingestion_runs(timestep,requested_items,metadata)
- values(${timestep},${candidates.length},${JSON.stringify({limit,concurrency,delayMs})}::jsonb) returning id`;
+ values(${timestep},${candidates.length},${JSON.stringify({limit,concurrency,delayMs,source:"MANUAL_RECOVERY",trigger:"backfill-market-history-script"})}::jsonb) returning id`;
 const runId=runRows[0].id;
 let completed=0,failed=0,received=0,upserted=0;
 
