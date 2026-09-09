@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "@/lib/db";
+import { syncMarketSnapshots } from "@/lib/jobs/market-snapshots";
+import { generateRecommendationBatch } from "@/lib/recommendations/generate";
 
 type Candidate = { id: number; name: string };
 type ApiPoint = { timestamp: number; avgHighPrice?: number | null; avgLowPrice?: number | null; highPriceVolume?: number | null; lowPriceVolume?: number | null };
@@ -42,6 +44,7 @@ export async function runMarketHistoryJob(options: JobOptions = {}) {
   let runId: string | null = null;
   let completed = 0, failed = 0, received = 0, upserted = 0;
   try {
+    const snapshots = await syncMarketSnapshots();
     const candidates = await sql`
       with tracked as (
         select
@@ -154,7 +157,29 @@ export async function runMarketHistoryJob(options: JobOptions = {}) {
       on conflict(item_id,timestep) do update set eligible=excluded.eligible,quality_score=excluded.quality_score,bar_count=excluded.bar_count,expected_bar_count=excluded.expected_bar_count,coverage_ratio=excluded.coverage_ratio,median_volume=excluded.median_volume,stale_ratio=excluded.stale_ratio,gap_count=excluded.gap_count,first_bar_at=excluded.first_bar_at,last_bar_at=excluded.last_bar_at,reason=excluded.reason,evaluated_at=now()`;
     const summary = await sql`select count(*)::int rows,count(distinct item_id)::int items,max(bucket_at) latest_bar_at from ml_training_rows_5m`;
     const eligible = await sql`select count(*)::int eligible_items from model_item_eligibility where timestep='5m' and eligible=true`;
-    return { ok: failed === 0, skipped: false, runId, requested: candidates.length, completed, failed, barsReceived: received, barsUpserted: upserted, eligibleItems: Number((eligible[0] as {eligible_items: unknown}).eligible_items), latestBarAt: (summary[0] as {latest_bar_at: unknown}).latest_bar_at, durationMs: Date.now()-startedAt };
+    const recommendations = await generateRecommendationBatch(
+      "SCHEDULED_MARKET_SYNC",
+      { trigger: "vercel-market-history", owner, runId, observedAt: snapshots.observedAt },
+    );
+    return {
+      ok: failed === 0,
+      skipped: false,
+      runId,
+      snapshots,
+      history: {
+        requested: candidates.length,
+        completed,
+        failed,
+        barsReceived: received,
+        barsUpserted: upserted,
+        latestBarAt: (summary[0] as {latest_bar_at: unknown}).latest_bar_at,
+      },
+      eligibility: {
+        eligibleItems: Number((eligible[0] as {eligible_items: unknown}).eligible_items),
+      },
+      recommendations,
+      durationMs: Date.now()-startedAt,
+    };
   } catch (error) {
     if (runId) await sql`update market_ingestion_runs set status='FAILED',completed_at=now(),completed_items=${completed},failed_items=${failed},bars_received=${received},bars_upserted=${upserted},error_summary=${String(error).slice(0,1000)} where id=${runId}`;
     throw error;
