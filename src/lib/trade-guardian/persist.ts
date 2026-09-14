@@ -114,8 +114,8 @@ async function persistGuidance(tradeId: string, itemId: number, snapshotId: numb
   `;
   const guidanceId = String(rows[0]?.guidance_id ?? "");
   if (!guidanceId) throw new Error(`Guidance persistence failed for trade ${tradeId}.`);
-  if (!result.actionable && result.status !== "STALE_DATA") {
-    await sql`update alerts set is_resolved=true where trade_id=${tradeId}::uuid and not is_resolved and alert_type in ('BUY_PRICE_ADJUSTMENT','SELL_PRICE_ADJUSTMENT','QUANTITY_ADJUSTMENT','PROFIT_BELOW_MINIMUM','BREAK_EVEN_WARNING','QUOTE_STALE')`;
+  if (!result.actionable) {
+    await sql`update alerts set is_read=true,is_resolved=true where trade_id=${tradeId}::uuid and not is_resolved and alert_type in ('BUY_PRICE_ADJUSTMENT','SELL_PRICE_ADJUSTMENT','QUANTITY_ADJUSTMENT','PROFIT_BELOW_MINIMUM','BREAK_EVEN_WARNING','QUOTE_STALE')`;
     return 0;
   }
   const dedupeKey = guidanceDedupeKey(tradeId, result);
