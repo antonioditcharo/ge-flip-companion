@@ -18,6 +18,8 @@ const requiredTables = [
   "ml_dataset_exports",
   "job_locks",
   "schema_migrations",
+  "trade_guidance",
+  "trade_buy_limit_windows",
 ];
 
 const requiredViews = [
@@ -36,6 +38,11 @@ const requiredColumns = [
   ["recommendations", "classification"],
   ["trades", "recommendation_id"],
   ["trades", "realized_tax"],
+  ["trades", "buy_offer_price"],
+  ["trades", "sell_offer_price"],
+  ["trades", "last_evaluated_at"],
+  ["alerts", "guidance_id"],
+  ["alerts", "dedupe_key"],
 ] as const;
 
 export async function GET() {
@@ -66,7 +73,12 @@ export async function GET() {
             ('recommendations', 'rank'),
             ('recommendations', 'classification'),
             ('trades', 'recommendation_id'),
-            ('trades', 'realized_tax')
+            ('trades', 'realized_tax'),
+            ('trades', 'buy_offer_price'),
+            ('trades', 'sell_offer_price'),
+            ('trades', 'last_evaluated_at'),
+            ('alerts', 'guidance_id'),
+            ('alerts', 'dedupe_key')
           )
       `,
     ]);
