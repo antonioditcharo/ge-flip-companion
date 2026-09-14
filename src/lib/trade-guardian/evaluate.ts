@@ -150,11 +150,10 @@ export function evaluateTradeGuidance(input: GuardianInput): GuardianResult {
 
   const latestHigh = input.latestHigh as number;
   const latestLow = input.latestLow as number;
-  const liquidityQuantity = Math.max(1, Math.floor(Math.max(0, input.volume5m ?? 0) * 0.25));
-  const buyLimitQuantity = input.buyLimitRemaining == null
-    ? input.remainingQuantity
-    : Math.max(0, Math.floor(input.buyLimitRemaining));
-  const recommendedQuantity = Math.min(input.remainingQuantity, liquidityQuantity, buyLimitQuantity);
+  const buyLimitQuantity = input.side === "BUY" && input.buyLimitRemaining != null
+    ? Math.max(0, Math.floor(input.buyLimitRemaining))
+    : input.remainingQuantity;
+  const recommendedQuantity = Math.min(input.remainingQuantity, buyLimitQuantity);
 
   if (recommendedQuantity < input.remainingQuantity) {
     return {
@@ -166,8 +165,8 @@ export function evaluateTradeGuidance(input: GuardianInput): GuardianResult {
       breakEvenPrice: input.averageBuyPrice && validPrice(input.averageBuyPrice) ? breakEvenSellPrice(input.averageBuyPrice) : null,
       liveExpectedProfit: null,
       liveExpectedRoi: null,
-      reasonCodes: [buyLimitQuantity < input.remainingQuantity ? "BUY_LIMIT_REMAINING" : "LOW_RECENT_VOLUME"],
-      message: `Reduce the remaining order quantity from ${input.remainingQuantity.toLocaleString()} to ${recommendedQuantity.toLocaleString()} based on recorded limits and recent public volume.`,
+      reasonCodes: ["BUY_LIMIT_REMAINING"],
+      message: `Reduce the remaining buy quantity from ${input.remainingQuantity.toLocaleString()} to ${recommendedQuantity.toLocaleString()} based on the item buy limit and recorded purchases in the current four-hour window.`,
     };
   }
 

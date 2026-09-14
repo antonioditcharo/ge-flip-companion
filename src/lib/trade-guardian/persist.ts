@@ -89,18 +89,23 @@ async function persistGuidance(tradeId: string, itemId: number, snapshotId: numb
       update trade_guidance
       set active=false,resolved_at=coalesce(resolved_at,now())
       where trade_id=${tradeId}::uuid and side=${result.side} and active=true
+      returning id
+    ), retirement_barrier as (
+      select count(*) as retired_count from retired
     ), inserted as (
       insert into trade_guidance(
         trade_id,market_snapshot_id,evaluated_at,expires_at,side,guidance_status,
         current_offer_price,recommended_price,current_offer_quantity,recommended_quantity,
         remaining_quantity,break_even_price,live_expected_profit,live_expected_roi,
         quote_age_minutes,reason_codes,message,active
-      ) values(
+      )
+      select
         ${tradeId}::uuid,${snapshotId},now(),${result.expiresAt}::timestamptz,${result.side},${result.status},
         null,${result.recommendedPrice},null,${result.recommendedQuantity},${result.remainingQuantity},
         ${result.breakEvenPrice},${result.liveExpectedProfit},${result.liveExpectedRoi},
         ${result.quoteAgeMinutes},${JSON.stringify(result.reasonCodes)}::jsonb,${result.message},true
-      ) returning id
+      from retirement_barrier
+      returning id
     )
     update trades set last_market_snapshot_id=${snapshotId},last_evaluated_at=now(),
       needs_attention=${result.actionable || result.status === "STALE_DATA"},current_instruction=${result.message},updated_at=now()

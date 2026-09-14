@@ -28,13 +28,21 @@ assert.equal(raiseBuy.status, "RAISE_PRICE");
 assert.equal(raiseBuy.recommendedPrice, 105);
 assert.equal(raiseBuy.recommendedQuantity, 1_000);
 
-const reduce = evaluateTradeGuidance({
+const lowVolumeDoesNotForceReduction = evaluateTradeGuidance({
+  side: "BUY", currentOfferPrice: 100, currentOfferQuantity: 5_000, remainingQuantity: 5_000,
+  latestHigh: 120, latestLow: 100, latestHighTime: recent, latestLowTime: recent,
+  volume5m: 1_000, minimumProfit: 0, minimumRoi: 0, evaluatedAt: now,
+});
+assert.notEqual(lowVolumeDoesNotForceReduction.status, "REDUCE_QUANTITY");
+assert.equal(lowVolumeDoesNotForceReduction.recommendedQuantity, 5_000);
+
+const reduceForBuyLimit = evaluateTradeGuidance({
   side: "BUY", currentOfferPrice: 100, currentOfferQuantity: 5_000, remainingQuantity: 5_000,
   latestHigh: 120, latestLow: 100, latestHighTime: recent, latestLowTime: recent,
   volume5m: 1_000, buyLimitRemaining: 200, minimumProfit: 0, minimumRoi: 0, evaluatedAt: now,
 });
-assert.equal(reduce.status, "REDUCE_QUANTITY");
-assert.equal(reduce.recommendedQuantity, 200);
+assert.equal(reduceForBuyLimit.status, "REDUCE_QUANTITY");
+assert.equal(reduceForBuyLimit.recommendedQuantity, 200);
 
 const lowerSell = evaluateTradeGuidance({
   side: "SELL", currentOfferPrice: 1_200, currentOfferQuantity: 2_000, remainingQuantity: 2_000,
@@ -56,7 +64,7 @@ assert.equal(breakEven.status, "EXIT_AT_BREAK_EVEN");
 assert.equal(breakEven.recommendedPrice, 1_020);
 
 console.log("Active Trade Guardian engine validation passed.");
-console.table([staleResult, raiseBuy, reduce, lowerSell, breakEven].map((result) => ({
+console.table([staleResult, raiseBuy, lowVolumeDoesNotForceReduction, reduceForBuyLimit, lowerSell, breakEven].map((result) => ({
   side: result.side,
   status: result.status,
   actionable: result.actionable,

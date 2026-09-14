@@ -208,8 +208,8 @@ export default async function TradesPage({
                 />
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <FillForm id={String(row.id)} side="BUY" title="Record buy fill" icon={<ArrowDownToLine size={15} />} max={planned - bought} price={String(row.suggested_buy_price)} />
-                  <FillForm id={String(row.id)} side="SELL" title="Record sell fill" icon={<ArrowUpFromLine size={15} />} max={bought - sold} price={String(row.suggested_sell_price)} />
+                  <FillForm id={String(row.id)} side="BUY" title="Record buy fill" icon={<ArrowDownToLine size={15} />} max={planned - bought} price={String(row.buy_offer_price ?? row.suggested_buy_price)} quantity={number(row.buy_offer_quantity ?? Math.max(0, planned - bought))} />
+                  <FillForm id={String(row.id)} side="SELL" title="Record sell fill" icon={<ArrowUpFromLine size={15} />} max={bought - sold} price={String(row.sell_offer_price ?? row.suggested_sell_price)} quantity={number(row.sell_offer_quantity ?? Math.max(0, bought - sold))} />
                 </div>
 
                 <form action={cancelTrade} className="mt-4 border-t border-stone-800 pt-4">
@@ -322,7 +322,7 @@ function GuardianMetric({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg bg-stone-950/50 p-2"><p className="text-stone-500">{label}</p><p className="mt-1 font-semibold text-stone-200">{value}</p></div>;
 }
 
-function FillForm({ id, side, title, icon, max, price }: { id: string; side: GuardianSide; title: string; icon: React.ReactNode; max: number; price: string }) {
+function FillForm({ id, side, title, icon, max, price, quantity }: { id: string; side: GuardianSide; title: string; icon: React.ReactNode; max: number; price: string; quantity: number }) {
   const disabled = max <= 0;
-  return <form action={recordTradeFill} className="rounded-xl border border-stone-800 bg-stone-950/30 p-3"><input type="hidden" name="tradeId" value={id} /><input type="hidden" name="side" value={side} /><p className="flex items-center gap-2 text-sm font-semibold">{icon}{title}</p><p className="mt-1 text-xs text-stone-500">Remaining: {Math.max(0, max).toLocaleString()}</p><div className="mt-3 grid grid-cols-2 gap-2"><input aria-label={`${side} quantity`} name="quantity" type="number" min="1" max={Math.max(1, max)} defaultValue={Math.max(0, max)} disabled={disabled} className="rounded-lg border border-stone-700 bg-stone-950 px-2 py-2 text-sm" /><input aria-label={`${side} unit price`} name="unitPrice" type="number" min="1" defaultValue={price} disabled={disabled} className="rounded-lg border border-stone-700 bg-stone-950 px-2 py-2 text-sm" /></div><button disabled={disabled} className="mt-2 w-full rounded-lg bg-amber-400 px-3 py-2 text-xs font-semibold text-stone-950 disabled:cursor-not-allowed disabled:opacity-40">Record fill</button></form>;
+  return <form action={recordTradeFill} className="rounded-xl border border-stone-800 bg-stone-950/30 p-3"><input type="hidden" name="tradeId" value={id} /><input type="hidden" name="side" value={side} /><p className="flex items-center gap-2 text-sm font-semibold">{icon}{title}</p><p className="mt-1 text-xs text-stone-500">Remaining: {Math.max(0, max).toLocaleString()}</p><div className="mt-3 grid grid-cols-2 gap-2"><input aria-label={`${side} quantity`} name="quantity" type="number" min="1" max={Math.max(1, max)} defaultValue={Math.min(Math.max(1, quantity), Math.max(1, max))} disabled={disabled} className="rounded-lg border border-stone-700 bg-stone-950 px-2 py-2 text-sm" /><input aria-label={`${side} unit price`} name="unitPrice" type="number" min="1" defaultValue={price} disabled={disabled} className="rounded-lg border border-stone-700 bg-stone-950 px-2 py-2 text-sm" /></div><button disabled={disabled} className="mt-2 w-full rounded-lg bg-amber-400 px-3 py-2 text-xs font-semibold text-stone-950 disabled:cursor-not-allowed disabled:opacity-40">Record fill</button></form>;
 }
